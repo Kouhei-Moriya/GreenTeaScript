@@ -36,6 +36,7 @@ class KonohaByteCodeWriter {
 	public static final int OPCODE_ERROR = 20;
 	public static final int OPCODE_SAFEPOINT = 21;
 	public static final int OPCODE_CHKSTACK = 22;*/
+	private static final String ByteDelimiter = ",";
 	private static final String CodeDelimiter = "\n";
 
 
@@ -51,10 +52,10 @@ class KonohaByteCodeWriter {
 	public void WriteNewConst(int TypeNumber, Object Constant) {
 		if(Constant instanceof String) {
 			/*local*/String ConstString = Constant.toString();
-			this.ConstCode.add(TypeNumber + "," + ConstString.length() + "," + ConstString);			
+			this.ConstCode.add(TypeNumber + ByteDelimiter + ConstString.length() + ByteDelimiter + ConstString);			
 		}
 		else {
-			this.ConstCode.add(TypeNumber + "," + Constant.toString());			
+			this.ConstCode.add(TypeNumber + ByteDelimiter + Constant.toString());			
 		}
 	}
 
@@ -62,11 +63,11 @@ class KonohaByteCodeWriter {
 		this.VisittingClassField = new ArrayList<String>();
 	}
 	public void WriteClassField(int TypeSource, int TypeNum, String FieldName) {
-		this.VisittingClassField.add(TypeSource + "," + TypeNum + "," + FieldName.length() + "," + FieldName);
+		this.VisittingClassField.add(TypeSource + ByteDelimiter + TypeNum + ByteDelimiter + FieldName.length() + ByteDelimiter + FieldName);
 	}
 	public void SetNewClass(String ClassName) {
 		/*local*/int ClassFieldSize = this.VisittingClassField.size();
-		this.VisittingClassField.add(0, ClassName.length() + "," + ClassName + "," + ClassFieldSize);
+		this.VisittingClassField.add(0, ClassName.length() + ByteDelimiter + ClassName + ByteDelimiter + ClassFieldSize);
 
 		this.ClassCodeList.add(this.VisittingClassField);
 		this.VisittingClassField = null;
@@ -78,13 +79,13 @@ class KonohaByteCodeWriter {
 		this.VisittingMethodBody = new ArrayList<String>();
 	}
 	public void WriteMethodParam(int TypeSource, int TypeNum) {
-		this.VisittingMethodParam.add(TypeSource + "," + TypeNum);
+		this.VisittingMethodParam.add(TypeSource + ByteDelimiter + TypeNum);
 	}
-	/* public void WriteOpCode2(int OpCode, int Operand1, int Operand2, int Operand3) {
-		this.VisittingMethodBody.add(OpCode + "," + Operand1 + "," + Operand2 + "," + Operand3);
-	}*/
-	public void WriteOpCode(String Code) {
-		this.VisittingMethodBody.add(Code);
+	public void WriteOpCode(int OpCode, int Operand1, int Operand2, int Operand3) {
+		this.VisittingMethodBody.add(OpCode + ByteDelimiter + Operand1 + ByteDelimiter + Operand2 + ByteDelimiter + Operand3);
+	}
+	public void WriteOpJumpCode(int OpCode, int LabelNum, int Operand2, int Operand3) {
+		this.VisittingMethodBody.add(OpCode + ByteDelimiter + "L" + LabelNum + ByteDelimiter + Operand2 + ByteDelimiter + Operand3);
 	}
 	public void WriteNewLabel(int LabelNum) {
 		this.LabelMap.put(LabelNum, this.VisittingMethodBody.size());
@@ -95,7 +96,7 @@ class KonohaByteCodeWriter {
 			/*local*/String OpCode = this.VisittingMethodBody.get(i);
 			/*local*/int OpLabelIndex = OpCode.indexOf("L");
 			while(OpLabelIndex != -1) {
-				/*local*/int EndIndex = OpCode.indexOf(",", OpLabelIndex);
+				/*local*/int EndIndex = OpCode.indexOf(ByteDelimiter, OpLabelIndex);
 				/*local*/Integer LabelNum = Integer.valueOf(OpCode.substring(OpLabelIndex+1, EndIndex));
 				/*local*/Integer LabelOffset = this.LabelMap.get(LabelNum);
 				OpCode = OpCode.replace("L" + LabelNum, LabelOffset.toString());
@@ -106,14 +107,14 @@ class KonohaByteCodeWriter {
 	}
 	public void SetNewMethod(int ReturnTypeSource, int ReturnTypeNum, String MethodName) {
 		this.ResolveLabelOffset();
-		/*local*/String MethodHeader = ReturnTypeSource + "," + ReturnTypeNum + "," + MethodName.length() + "," + MethodName;
+		/*local*/String MethodHeader = ReturnTypeSource + ByteDelimiter + ReturnTypeNum + ByteDelimiter + MethodName.length() + ByteDelimiter + MethodName;
 		/*local*/int ParamSize = LibGreenTea.ListSize(this.VisittingMethodParam);
-		MethodHeader += "," + ParamSize;
+		MethodHeader += ByteDelimiter + ParamSize;
 		for(/*local*/int i = 0; i < ParamSize; ++i) {
-			MethodHeader += "," + this.VisittingMethodParam.get(i);
+			MethodHeader += ByteDelimiter + this.VisittingMethodParam.get(i);
 		}
 
-		MethodHeader += "," + this.VisittingMethodBody.size();
+		MethodHeader += ByteDelimiter + this.VisittingMethodBody.size();
 		this.VisittingMethodBody.add(0, MethodHeader);
 
 		this.MethodCodeList.add(this.VisittingMethodBody);
@@ -327,49 +328,49 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 
 	@Override public void VisitNullNode(GtNullNode Node) {
 		/*local*/int Reg = this.AllocRegister();
-		this.Writer.WriteOpCode(OPCODE_NUL + "," + Reg + ",0,0");
+		this.Writer.WriteOpCode(OPCODE_NUL, Reg, 0, 0);
 		this.PushRegister(Reg);
 	}
 
 	@Override public void VisitBooleanNode(GtBooleanNode Node) {
 		/*local*/int Index = this.AddConstant(new Boolean(Node.Value), Node.Type);
 		/*local*/int Reg = this.AllocRegister();
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + Reg + "," + NSET_UserConstant + "," + Index);
+		this.Writer.WriteOpCode(OPCODE_NSET, Reg, NSET_UserConstant, Index);
 		this.PushRegister(Reg);
 	}
 
 	@Override public void VisitIntNode(GtIntNode Node) {
 		/*local*/int Index = this.AddConstant(new Long(Node.Value), Node.Type);
 		/*local*/int Reg = this.AllocRegister();
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + Reg + "," + NSET_UserConstant + "," + Index);
+		this.Writer.WriteOpCode(OPCODE_NSET, Reg, NSET_UserConstant, Index);
 		this.PushRegister(Reg);
 	}
 
 	@Override public void VisitFloatNode(GtFloatNode Node) {
 		/*local*/int Index = this.AddConstant(new Float(Node.Value), Node.Type);
 		/*local*/int Reg = this.AllocRegister();
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + Reg + "," + NSET_UserConstant + "," + Index);
+		this.Writer.WriteOpCode(OPCODE_NSET, Reg, NSET_UserConstant, Index);
 		this.PushRegister(Reg);
 	}
 
 	@Override public void VisitStringNode(GtStringNode Node) {
 		/*local*/int Index = this.AddConstant(Node.Value, Node.Type);
 		/*local*/int Reg = this.AllocRegister();
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + Reg + "," + NSET_UserConstant + "," + Index);
+		this.Writer.WriteOpCode(OPCODE_NSET, Reg, NSET_UserConstant, Index);
 		this.PushRegister(Reg);
 	}
 
 	@Override public void VisitRegexNode(GtRegexNode Node) {
 		/*local*/int Index = this.AddConstant(Node.Value, Node.Type);
 		/*local*/int Reg = this.AllocRegister();
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + Reg + "," + NSET_UserConstant + "," + Index);
+		this.Writer.WriteOpCode(OPCODE_NSET, Reg, NSET_UserConstant, Index);
 		this.PushRegister(Reg);
 	}
 
 	@Override public void VisitConstPoolNode(GtConstPoolNode Node) {
 		/*local*/int Index = this.AddConstant(Node.ConstValue, Node.Type);
 		/*local*/int Reg = this.AllocRegister();
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + Reg + "," + NSET_UserConstant + "," + Index);
+		this.Writer.WriteOpCode(OPCODE_NSET, Reg, NSET_UserConstant, Index);
 		this.PushRegister(Reg);
 	}
 
@@ -379,10 +380,10 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int CallReg = TargetReg - ReturnIndex + ThisIndex;
 		for(/*local*/int i = 0; i < ArraySize; ++i) {
 			Node.NodeList.get(i).Accept(this);
-			this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+i+1) + "," + this.PopRegister() + ",0");
+			this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+i+1), this.PopRegister(), 0);
 		}
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + (CallReg+MethodIndex) + "," + NSET_InternalMethod + "," + this.GetInternalMethodNumber("SetArrayLiteral", Node.Type));
-		this.Writer.WriteOpCode(OPCODE_CALL + "," + CallReg + "," + ArraySize + ",0");
+		this.Writer.WriteOpCode(OPCODE_NSET, (CallReg+MethodIndex), NSET_InternalMethod, this.GetInternalMethodNumber("SetArrayLiteral", Node.Type));
+		this.Writer.WriteOpCode(OPCODE_CALL, CallReg, ArraySize, 0);
 		this.PushRegister(TargetReg);
 		this.FreeRegister(TargetReg + 1);
 	}
@@ -405,7 +406,7 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 
 	@Override public void VisitSetLocalNode(GtSetLocalNode Node) {
 		Node.ValueNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + this.LocalVarMap.get(Node.NativeName) + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, this.LocalVarMap.get(Node.NativeName), this.PopRegister(), 0);
 	}
 
 	@Override public void VisitGetCapturedNode(GtGetCapturedNode Node) {
@@ -421,7 +422,7 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int TargetReg = this.AllocRegister();
 		/*local*/ArrayList<GtFieldInfo> FieldList = this.ClassFieldMap.get(Node.RecvNode.Type);
 		/*local*/int Offset = this.GetFieldOffset(FieldList, Node.NativeName);
-		this.Writer.WriteOpCode(OPCODE_NMOVx + "," + TargetReg + "," + this.PopRegister() + "," + Offset);
+		this.Writer.WriteOpCode(OPCODE_NMOVx, TargetReg, this.PopRegister(), Offset);
 		this.PushRegister(TargetReg);
 	}
 
@@ -431,7 +432,7 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/ArrayList<GtFieldInfo> FieldList = this.ClassFieldMap.get(Node.RecvNode.Type);
 		/*local*/int Offset = this.GetFieldOffset(FieldList, Node.NativeName);
 		Node.ValueNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_XNMOV + "," + TargetReg + "," + Offset + "," + this.PopRegister());
+		this.Writer.WriteOpCode(OPCODE_XNMOV, TargetReg, Offset, this.PopRegister());
 	}
 
 	@Override public void VisitApplySymbolNode(GtApplySymbolNode Node) {
@@ -440,11 +441,11 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int CallReg = TargetReg - ReturnIndex + ThisIndex;
 		for(/*local*/int i = 0; i < ParamSize; ++i) {
 			Node.ParamList.get(i).Accept(this);
-			this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+i+1) + "," + this.PopRegister() + ",0");
+			this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+i+1), this.PopRegister(), 0);
 		}
 		/*local*/int CallMethod = this.MethodPool.indexOf(Node.ResolvedFunc.GetNativeFuncName());
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + (CallReg+MethodIndex) + "," + NSET_UserMethod + "," + CallMethod);
-		this.Writer.WriteOpCode(OPCODE_CALL + "," + CallReg + "," + ParamSize + ",0");
+		this.Writer.WriteOpCode(OPCODE_NSET, (CallReg+MethodIndex), NSET_UserMethod, CallMethod);
+		this.Writer.WriteOpCode(OPCODE_CALL, CallReg, ParamSize, 0);
 		this.PushRegister(TargetReg);
 		this.FreeRegister(TargetReg + 1);
 	}
@@ -456,12 +457,12 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int CallReg = TargetReg - ReturnIndex + ThisIndex;
 		for(/*local*/int i = 0; i < ParamSize; ++i) {
 			Node.ParamList.get(i).Accept(this);
-			this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+i+1) + "," + this.PopRegister() + ",0");
+			this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+i+1), this.PopRegister(), 0);
 		}
 		Node.FuncNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + CallReg + "," + this.PopRegister() + ",0");
-		this.Writer.WriteOpCode(OPCODE_LOOKUP + "," + CallReg + ",0,0");
-		this.Writer.WriteOpCode(OPCODE_CALL + "," + CallReg + "," + ParamSize + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, CallReg, this.PopRegister(), 0);
+		this.Writer.WriteOpCode(OPCODE_LOOKUP, CallReg, 0, 0);
+		this.Writer.WriteOpCode(OPCODE_CALL, CallReg, ParamSize, 0);
 		this.PushRegister(TargetReg);
 		this.FreeRegister(TargetReg + 1);
 	}
@@ -474,11 +475,11 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int TargetReg = this.ReserveRegister(2/*ArgumentSize*/ + CallParameters);
 		/*local*/int CallReg = TargetReg - ReturnIndex + ThisIndex;
 		Node.RecvNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+1) + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+1), this.PopRegister(), 0);
 		Node.IndexNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+2) + "," + this.PopRegister() + ",0");
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + (CallReg+MethodIndex) + "," + NSET_InternalMethod + "," + this.GetInternalMethodNumber("GetIndex", Node.Type));
-		this.Writer.WriteOpCode(OPCODE_CALL + "," + CallReg + "," + 2/*ArgumentSize*/ + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+2), this.PopRegister(), 0);
+		this.Writer.WriteOpCode(OPCODE_NSET, (CallReg+MethodIndex), NSET_InternalMethod, this.GetInternalMethodNumber("GetIndex", Node.Type));
+		this.Writer.WriteOpCode(OPCODE_CALL, CallReg, 2/*ArgumentSize*/, 0);
 		this.PushRegister(TargetReg);
 		this.FreeRegister(TargetReg + 1);
 	}
@@ -488,15 +489,15 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int CallReg = TargetReg - ReturnIndex + ThisIndex;
 		Node.RecvNode.Accept(this);
 		///*local*/int ArrayVarReg = this.PopRegister();
-		//this.Writer.WriteMethodBody(OPCODE_NMOV + "," + (CallReg+1) + "," + ArrayVarReg);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+1) + "," + this.PopRegister() + ",0");
+		//this.Writer.WriteMethodBody(OPCODE_NMOV, (CallReg+1), ArrayVarReg);
+		this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+1), this.PopRegister(), 0);
 		Node.IndexNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+2) + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+2), this.PopRegister(), 0);
 		Node.ValueNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+3) + "," + this.PopRegister() + ",0");
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + (CallReg+MethodIndex) + "," + NSET_InternalMethod + "," + this.GetInternalMethodNumber("SetIndex", Node.Type));
-		this.Writer.WriteOpCode(OPCODE_CALL + "," + CallReg + "," + 3/*ArgumentSize*/ + ",0");
-		//this.Writer.WriteMethodBody(OPCODE_NMOV + "," + ArrayVarReg + "," + TargetReg);
+		this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+3), this.PopRegister(), 0);
+		this.Writer.WriteOpCode(OPCODE_NSET, (CallReg+MethodIndex), NSET_InternalMethod, this.GetInternalMethodNumber("SetIndex", Node.Type));
+		this.Writer.WriteOpCode(OPCODE_CALL, CallReg, 3/*ArgumentSize*/, 0);
+		//this.Writer.WriteMethodBody(OPCODE_NMOV, ArrayVarReg, TargetReg);
 		this.FreeRegister(TargetReg);
 	}
 
@@ -508,10 +509,10 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int TargetReg = this.AllocRegister();
 		/*local*/int EndLabel = this.NewLabel();
 		Node.LeftNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + TargetReg + "," + this.PopRegister() + ",0");
-		this.Writer.WriteOpCode(OPCODE_JMPF + "," + "L" + EndLabel + "," + TargetReg + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, TargetReg, this.PopRegister(), 0);
+		this.Writer.WriteOpJumpCode(OPCODE_JMPF, EndLabel, TargetReg, 0);
 		Node.RightNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + TargetReg + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, TargetReg, this.PopRegister(), 0);
 		this.Writer.WriteNewLabel(EndLabel);
 		this.PushRegister(TargetReg);
 	}
@@ -521,12 +522,12 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int RightLabel = this.NewLabel();
 		/*local*/int EndLabel = this.NewLabel();
 		Node.LeftNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + TargetReg + "," + this.PopRegister() + ",0");
-		this.Writer.WriteOpCode(OPCODE_JMPF + "," + "L" + RightLabel + "," + TargetReg + ",0");
-		this.Writer.WriteOpCode(OPCODE_JMP + "," + "L" + EndLabel + ",0,0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, TargetReg, this.PopRegister(), 0);
+		this.Writer.WriteOpJumpCode(OPCODE_JMPF, RightLabel, TargetReg, 0);
+		this.Writer.WriteOpJumpCode(OPCODE_JMP, EndLabel, 0, 0);
 		this.Writer.WriteNewLabel(RightLabel);
 		Node.RightNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + TargetReg + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, TargetReg, this.PopRegister(), 0);
 		this.Writer.WriteNewLabel(EndLabel);
 		this.PushRegister(TargetReg);
 	}
@@ -535,10 +536,10 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int TargetReg = this.ReserveRegister(1/*ArgumentSize*/ + CallParameters);
 		/*local*/int CallReg = TargetReg - ReturnIndex + ThisIndex;
 		Node.RecvNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+1) + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+1), this.PopRegister(), 0);
 		/*local*/String Op = Node.Token.ParsedText; //Node.NativeName
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + (CallReg+MethodIndex) + "," + NSET_InternalMethod + "," + this.GetInternalMethodNumber(Op, Node.Type));
-		this.Writer.WriteOpCode(OPCODE_CALL + "," + CallReg + "," + 1/*ArgumentSize*/ + ",0");
+		this.Writer.WriteOpCode(OPCODE_NSET, (CallReg+MethodIndex), NSET_InternalMethod, this.GetInternalMethodNumber(Op, Node.Type));
+		this.Writer.WriteOpCode(OPCODE_CALL, CallReg, 1/*ArgumentSize*/, 0);
 		this.PushRegister(TargetReg);
 		this.FreeRegister(TargetReg + 1);
 	}
@@ -548,11 +549,11 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int TargetReg = this.ReserveRegister(2/*ArgumentSize*/ + CallParameters);
 		/*local*/int CallReg = TargetReg - ReturnIndex + ThisIndex;
 		Node.RecvNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+1) + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+1), this.PopRegister(), 0);
 		/*local*/int Index = this.AddConstant(new Long(1), GtStaticTable.IntType);
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + (CallReg+2) + "," + NSET_UserConstant + "," + Index);
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + (CallReg+MethodIndex) + "," + NSET_InternalMethod + "," + this.GetInternalMethodNumber("+", Node.Type));
-		this.Writer.WriteOpCode(OPCODE_CALL + "," + CallReg + "," + 2/*ArgumentSize*/ + ",0");
+		this.Writer.WriteOpCode(OPCODE_NSET, (CallReg+2), NSET_UserConstant, Index);
+		this.Writer.WriteOpCode(OPCODE_NSET, (CallReg+MethodIndex), NSET_InternalMethod, this.GetInternalMethodNumber("+", Node.Type));
+		this.Writer.WriteOpCode(OPCODE_CALL, CallReg, 2/*ArgumentSize*/, 0);
 		this.PushRegister(TargetReg);
 		this.FreeRegister(TargetReg + 1);
 	}
@@ -573,12 +574,12 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int TargetReg = this.ReserveRegister(2/*ArgumentSize*/ + CallParameters);
 		/*local*/int CallReg = TargetReg - ReturnIndex + ThisIndex;
 		Node.LeftNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+1) + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+1), this.PopRegister(), 0);
 		Node.RightNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+2) + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+2), this.PopRegister(), 0);
 		/*local*/String Op = Node.Token.ParsedText; //Node.NativeName
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + (CallReg+MethodIndex) + "," + NSET_InternalMethod + "," + this.GetInternalMethodNumber(Op, Node.Type));
-		this.Writer.WriteOpCode(OPCODE_CALL + "," + CallReg + "," + 2/*ArgumentSize*/ + ",0");
+		this.Writer.WriteOpCode(OPCODE_NSET, (CallReg+MethodIndex), NSET_InternalMethod, this.GetInternalMethodNumber(Op, Node.Type));
+		this.Writer.WriteOpCode(OPCODE_CALL, CallReg, 2/*ArgumentSize*/, 0);
 		this.PushRegister(TargetReg);
 		this.FreeRegister(TargetReg + 1);
 	}
@@ -593,19 +594,19 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int CallReg = TargetReg - ReturnIndex + ThisIndex;
 		for(/*local*/int i = 0; i < ParamSize; ++i) {
 			Node.ParamList.get(i).Accept(this);
-			this.Writer.WriteOpCode(OPCODE_NMOV + "," + (CallReg+i+1) + "," + this.PopRegister() + ",0");
+			this.Writer.WriteOpCode(OPCODE_NMOV, (CallReg+i+1), this.PopRegister(), 0);
 		}
 		/*local*/int CallMethod = this.MethodPool.indexOf(Node.Func.GetNativeFuncName());
-		this.Writer.WriteOpCode(OPCODE_NSET + "," + (CallReg+MethodIndex) + "," + NSET_UserMethod + "," + CallMethod);
-		//this.Writer.WriteMethodBody("NEW  " + "REG" + CallReg + ", CLASS" + this.ClassPool.indexOf(Node.Type));
-		this.Writer.WriteOpCode(OPCODE_CALL + "," + CallReg + "," + ParamSize + ",0");
+		this.Writer.WriteOpCode(OPCODE_NSET, (CallReg+MethodIndex), NSET_UserMethod, CallMethod);
+		//this.Writer.WriteMethodBody("NEW  " + "REG" + CallReg, " CLASS" + this.ClassPool.indexOf(Node.Type));
+		this.Writer.WriteOpCode(OPCODE_CALL, CallReg, ParamSize, 0);
 		this.PushRegister(TargetReg);
 		this.FreeRegister(TargetReg + 1);
 	}
 
 	@Override public void VisitAllocateNode(GtAllocateNode Node) {
 		/*local*/int Reg = this.AllocRegister();
-		this.Writer.WriteOpCode(OPCODE_NEW + "," + Reg + "," + TypeSource_UserDefined + "," + this.ClassPool.indexOf(Node.Type));
+		this.Writer.WriteOpCode(OPCODE_NEW, Reg, TypeSource_UserDefined, this.ClassPool.indexOf(Node.Type));
 		this.PushRegister(Reg);
 	}
 
@@ -624,7 +625,7 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 	@Override public void VisitVarDeclNode(GtVarDeclNode Node) {
 		this.LocalVarMap.put(Node.NativeName, this.AllocRegister());
 		Node.InitNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_NMOV + "," + this.LocalVarMap.get(Node.NativeName) + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpCode(OPCODE_NMOV, this.LocalVarMap.get(Node.NativeName), this.PopRegister(), 0);
 		this.VisitBlock(Node.BlockNode);
 		this.LocalVarMap.remove(Node.NativeName);
 	}
@@ -637,9 +638,9 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		/*local*/int ElseLabel = this.NewLabel();
 		/*local*/int EndLabel = this.NewLabel();
 		Node.CondNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_JMPF + "," + "L" + ElseLabel + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpJumpCode(OPCODE_JMPF, ElseLabel, this.PopRegister(), 0);
 		this.VisitBlock(Node.ThenNode);
-		this.Writer.WriteOpCode(OPCODE_JMP + "," + ",L" + EndLabel + ",0,0");
+		this.Writer.WriteOpJumpCode(OPCODE_JMP, EndLabel, 0, 0);
 		this.Writer.WriteNewLabel(ElseLabel);
 		this.VisitBlock(Node.ElseNode);
 		this.Writer.WriteNewLabel(EndLabel);
@@ -651,9 +652,9 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		this.PushLoopLabel(CondLabel, EndLabel);
 		this.Writer.WriteNewLabel(CondLabel);
 		Node.CondNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_JMPF + "," + "L" + EndLabel + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpJumpCode(OPCODE_JMPF, EndLabel, this.PopRegister(), 0);
 		this.VisitBlock(Node.BodyNode);
-		this.Writer.WriteOpCode(OPCODE_JMP + "," + "L" + CondLabel + ",0,0");
+		this.Writer.WriteOpJumpCode(OPCODE_JMP, CondLabel, 0, 0);
 		this.Writer.WriteNewLabel(EndLabel);
 		this.PopLoopLabel();
 	}
@@ -667,8 +668,8 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		this.VisitBlock(Node.BodyNode);
 		this.Writer.WriteNewLabel(CondLabel);
 		Node.CondNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_JMPF + "," + "L" + EndLabel + "," + this.PopRegister() + ",0");
-		this.Writer.WriteOpCode(OPCODE_JMP + "," + "L" + BodyLabel + ",0,0");
+		this.Writer.WriteOpJumpCode(OPCODE_JMPF, EndLabel, this.PopRegister(), 0);
+		this.Writer.WriteOpJumpCode(OPCODE_JMP, BodyLabel, 0, 0);
 		this.Writer.WriteNewLabel(EndLabel);
 		this.PopLoopLabel();
 	}
@@ -680,11 +681,11 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 		this.PushLoopLabel(IterLabel, EndLabel);
 		this.Writer.WriteNewLabel(CondLabel);
 		Node.CondNode.Accept(this);
-		this.Writer.WriteOpCode(OPCODE_JMPF + "," + "L" + EndLabel + "," + this.PopRegister() + ",0");
+		this.Writer.WriteOpJumpCode(OPCODE_JMPF, EndLabel, this.PopRegister(), 0);
 		this.VisitBlock(Node.BodyNode);
 		this.Writer.WriteNewLabel(IterLabel);
 		this.VisitBlock(Node.IterNode);
-		this.Writer.WriteOpCode(OPCODE_JMP + "," + "L" + CondLabel + ",0,0");
+		this.Writer.WriteOpJumpCode(OPCODE_JMP, CondLabel, 0, 0);
 		this.Writer.WriteNewLabel(EndLabel);
 		this.PopLoopLabel();
 	}
@@ -694,11 +695,11 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 	}
 
 	@Override public void VisitContinueNode(GtContinueNode Node) {
-		this.Writer.WriteOpCode(OPCODE_JMP + "," + "L" + this.PeekContinueLabel() + ",0,0");
+		this.Writer.WriteOpJumpCode(OPCODE_JMP, this.PeekContinueLabel(), 0, 0);
 	}
 
 	@Override public void VisitBreakNode(GtBreakNode Node) {
-		this.Writer.WriteOpCode(OPCODE_JMP + "," + "L" + this.PeekBreakLabel() + ",0,0");
+		this.Writer.WriteOpJumpCode(OPCODE_JMP, this.PeekBreakLabel(), 0, 0);
 	}
 
 	@Override public void VisitStatementNode(GtStatementNode Node) {
@@ -708,9 +709,9 @@ public class KonohaByteCodeGenerator extends GtSourceGenerator {
 	@Override public void VisitReturnNode(GtReturnNode Node) {
 		if(Node.ValueNode != null) {
 			Node.ValueNode.Accept(this);
-			this.Writer.WriteOpCode(OPCODE_NMOV + "," + ReturnIndex + "," + this.PopRegister() + ",0");
+			this.Writer.WriteOpCode(OPCODE_NMOV, ReturnIndex, this.PopRegister(), 0);
 		}
-		this.Writer.WriteOpCode(OPCODE_RET + ",0,0,0");
+		this.Writer.WriteOpCode(OPCODE_RET, 0, 0, 0);
 	}
 
 	@Override public void VisitYieldNode(GtYieldNode Node) {
